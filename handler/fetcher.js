@@ -81,3 +81,48 @@ const fetchFees = async body => {
         throw `there is no fee found for ${body.country}`;
     }
 }
+
+/**
+ * At that moment, intended to be used for painting only.
+ * The logic behind is to get all the canvas sizes possible to replicate current painting given width and height and shape of current one.
+ * For example, if painting is 40x40 and it is possible to make the same but 30x30, then price will be calculated proportionally.
+ */
+module.exports.fetchProportions = async (body) => {
+    const params = {
+        TableName: process.env.ITEM_PROPORTIONS,
+        IndexName: 'TypeWidthIndex',
+        KeyConditionExpression: 'shapeType = :shapeType and w = :w',
+        FilterExpression: 'h = :h',
+        ExpressionAttributeValues: {
+            ':shapeType': body.sizeAndWeight.shapeType,
+            ':w': body.sizeAndWeight.w,
+            ':h': body.sizeAndWeight.h
+        }
+    };
+
+    const proportions = await dynamoDbGet(params);
+
+    return proportions && proportions.Items.length > 0
+        ?
+        proportions.Items[0].proportions.map(item => {
+            return {
+                ...body,
+                sizeAndWeight: {
+                    ...body.sizeAndWeight,
+                    w: item.w, h: item.h
+                }
+            }
+        })
+        :
+        null;
+}
+
+/**
+ * Take event body and pre-populate it with shipping and fees info for further calculation
+ */
+module.exports.decorateBody = async event => {
+    const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+    await fetchShipping(body)
+    await fetchFees(body)
+    return body;
+};
