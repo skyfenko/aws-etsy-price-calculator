@@ -29,7 +29,6 @@ class Price {
 
     /**
      * Price = ((desired return + 1) * (item costs + shipping costs + listing fee + payment processing fee amount)) / (1 - PPF % - transaction fee %) - desired return * (PPF % + transaction fee %)
-     * @param desiredReturn
      */
     calculatePriceWithReturn() {
         const desiredReturn = this.benefit.desiredReturn / 100;
@@ -84,7 +83,6 @@ class Price {
 
     /**
      * Price = (desired net profit + item costs + shipping costs + listing fee + payment processing fee amount) / (1 - PPF % - transaction fee %)
-     * @returns {number}
      */
     calculatePriceWithNetProfit() {
         const desiredNetProfit = this.benefit.desiredNetProfit;
