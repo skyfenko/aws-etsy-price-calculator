@@ -1,0 +1,179 @@
+service: etsy-price-calculator
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+  stage: dev
+  region: eu-west-1
+  environment:
+    DELIVERY_PROFILES: ${self:service}-${opt:stage, self:provider.stage}-delivery-profiles
+    FEES: ${self:service}-${opt:stage, self:provider.stage}-fees
+    ITEM_PROPORTIONS: ${self:service}-${opt:stage, self:provider.stage}-item-proportions
+    AWS_DEPLOY_REGION: ${self:provider.region}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DELIVERY_PROFILES}"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DELIVERY_PROFILES}/index/FromCountryAndWeightIndex"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.FEES}"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.FEES}/index/CountryIndex"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.ITEM_PROPORTIONS}"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.ITEM_PROPORTIONS}/index/TypeWidthIndex"
+
+package:
+  exclude:
+    - tests/**
+
+functions:
+  priceWithMargin:
+    handler: handler/priceService.priceWithMargin
+    events:
+      - http:
+          path: margin
+          method: post
+          cors:
+            origin: '*' 
+            headers: 
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Origin
+            allowCredentials: true
+  priceWithReturn:
+    handler: handler/priceService.priceWithReturn
+    events:
+      - http:
+          path: return
+          method: post
+          cors:
+            origin: '*' 
+            headers: 
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Origin
+            allowCredentials: true
+  priceWithNetProfit:
+    handler: handler/priceService.priceWithNetProfit
+    events:
+      - http:
+          path: profit
+          method: post
+          cors:
+            origin: '*' 
+            headers: 
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+              - Access-Control-Allow-Origin
+            allowCredentials: true
+resources:
+  Resources:
+    GatewayResponseDefault4XX:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+    GatewayResponseDefault5XX:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: DEFAULT_5XX
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+    DeliveryProfiles:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.DELIVERY_PROFILES}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: fromCountry
+            AttributeType: S
+          - AttributeName: weightFrom
+            AttributeType: N
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+          - AttributeName: fromCountry
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: FromCountryAndWeightIndex
+            KeySchema:
+              - AttributeName: fromCountry
+                KeyType: HASH
+              - AttributeName: weightFrom
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+    Fees:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.FEES}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: country
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+          - AttributeName: country
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: CountryIndex
+            KeySchema:
+              - AttributeName: country
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+    ItemProportions:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.ITEM_PROPORTIONS}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+          - AttributeName: shapeType
+            AttributeType: S
+          - AttributeName: w
+            AttributeType: N
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+          - AttributeName: shapeType
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: TypeWidthIndex
+            KeySchema:
+              - AttributeName: shapeType
+                KeyType: HASH
+              - AttributeName: w
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
